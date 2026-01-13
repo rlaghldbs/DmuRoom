@@ -9,6 +9,8 @@ from io import BytesIO
 # --------------------------------------------------------------------------
 
 # 데이터 정의는 코드에 유지
+
+# 학과 -> 학부 매핑
 MAJOR_TO_FACULTY_MAP = {
     '기계공학과': '기계공학부', '기계설계공학과': '기계공학부', '자동화공학과': '로봇자동화공학부', '로봇소프트웨어과': '로봇자동화공학부',
     '전기공학과': '전기전자통신공학부', '반도체전자공학과': '전기전자통신공학부', '정보통신공학과': '전기전자통신공학부', '소방안전관리과': '전기전자통신공학부',
@@ -17,6 +19,7 @@ MAJOR_TO_FACULTY_MAP = {
     'AR·VR콘텐츠디자인과': '생활환경공학부', '경영학과': '경영학부', '세무회계학과': '경영학부', '유통마케팅학과': '경영학부',
     '호텔관광학과': '경영학부', '경영정보학과': '경영학부', '빅데이터경영과': '경영학부', '자유전공학과': '자유전공학부'
 }
+# 기숙사 실명 긴 형태 -> 짧은 형태 매핑
 DORM_LONG_TO_SHORT_MAP = {
     'A형(기숙사형 2인호의 2인실)': 'A형', 'B형(기숙사형 2인호의 1인실)': 'B형',
     'C형(기숙사형 3인호의 1인실)': 'C형', 'D형(기숙사형 3인호의 2인실)': 'D형',
@@ -24,6 +27,7 @@ DORM_LONG_TO_SHORT_MAP = {
     'G형(아파트형 2인실(여학생 전용))': 'G형'
 }
 
+#방설정 파일
 def load_room_config(config_file):
     logs = []
     config_df = None
@@ -36,6 +40,7 @@ def load_room_config(config_file):
         return None, None, None, None,logs
     
     available_rooms, room_capacities, room_prices = {}, {}, {}
+    
     for name, group in config_df.groupby('Type'):
         room_capacities[name] = group['room'].iloc[0]
         room_prices[name] = group['amount'].iloc[0]
@@ -56,13 +61,26 @@ def find_best_pair_info(unassigned_students):
         is_same_smoking = (s1.흡연여부 == s2.흡연여부)
         is_same_major = (s1.학과 == s2.학과)
         is_same_faculty = (hasattr(s1, '학부') and hasattr(s2, '학부') and s1.학부 == s2.학부)
+        is_same_pattern=(s1.생활패턴==s2.생활패턴)
         if is_same_smoking:
-            if is_same_major: score = 10; reasons = ['흡연 여부 동일', '동일 학과']
-            elif is_same_faculty: score = 8; reasons = ['흡연 여부 동일', '동일 학부']
-            else: score = 6; reasons = ['흡연 여부 동일']
+            if is_same_major:
+                score = 10; reasons = ['흡연 여부 동일', '동일 학과']
+                if is_same_pattern: score +=2; reasons.append('생활패턴 동일')
+                
+            elif is_same_faculty:
+                 score = 8; reasons = ['흡연 여부 동일', '동일 학부']
+                 if is_same_pattern: score +=2; reasons.append('생활패턴 동일')
+            else: 
+                score = 6; reasons = ['흡연 여부 동일']
+                if is_same_pattern: score +=2; reasons.append('생활패턴 동일')
         else:
-            if is_same_major: score = 4; reasons = ['혼합 배정 (동일 학과)']
-            elif is_same_faculty: score = 2; reasons = ['혼합 배정 (동일 학부)']
+            if is_same_major:
+                 score = 4; reasons = ['혼합 배정 (동일 학과)']
+                 if is_same_pattern: score +=2; reasons.append('생활패턴 동일')
+                 
+            elif is_same_faculty:
+                 score = 2; reasons = ['혼합 배정 (동일 학부)']
+                 if is_same_pattern: score +=2; reasons.append('생활패턴 동일')
         if score > 0:
             possible_pairs.append({'pair': (s1.Index, s2.Index), 'score': score, 'reason': ', '.join(reasons)})
 
@@ -289,7 +307,7 @@ if st.button("🚀 배정 실행하기", type="primary"):
                     if not vacant_rooms_df.empty:
                         new_vacant_rows = []
                         short_to_long_map = {v: k for k, v in DORM_LONG_TO_SHORT_MAP.items()}
-
+                    
                         for _, room_info in vacant_rooms_df.iterrows():
                             capacity = int(room_info['Max'])
                             
@@ -321,7 +339,7 @@ if st.button("🚀 배정 실행하기", type="primary"):
                     assignments_df.rename(columns={'학과': '학과(필수)', '희망룸메이트': '희망하는 룸메이트 기재'}, inplace=True)
                     column_order = [
                         '기숙사 실', '타입', '방 번호', '호실', '성별', 
-                        '학부', '학과(필수)', '학번', '성명', '본인 핸드폰 번호', '흡연여부',
+                        '학부', '학과(필수)', '학번', '성명', '본인 핸드폰 번호', '흡연여부','생활패턴',
                         '희망하는 룸메이트 기재','금액', '선정 이유'
                     ]
                     final_df = assignments_df.reindex(columns=column_order).sort_values(
